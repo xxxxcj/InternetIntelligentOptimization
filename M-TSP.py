@@ -28,7 +28,7 @@ TOURNSIZE = 3  # 锦标赛每轮人数
 IND_SIZE = 100
 MAX_POS_RANGE = int(1e3)
 
-random.seed(166)
+# random.seed(166)
 
 # gr*.json contains the distance map in list of list style in JSON format
 # Optimal solutions are : gr17 = 2085, gr24 = 1272, gr120 = 6942
@@ -46,8 +46,7 @@ creator.create("Individual", array.array, typecode='i', fitness=creator.FitnessM
 toolbox = base.Toolbox()
 
 # Attribute generator
-toolbox.register("indices", random.sample, [i for i in range(IND_SIZE + TRAVELLER_NUM)],
-                 IND_SIZE + TRAVELLER_NUM)
+toolbox.register("indices", random.sample, [i for i in range(IND_SIZE + TRAVELLER_NUM-1)], IND_SIZE + TRAVELLER_NUM-1)
 
 # Structure initializers
 toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.indices)
@@ -55,9 +54,25 @@ toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
 
 def evalMTSP(individual, map: Map):
-    distance = map.get_distance(0, IND_SIZE - 1)
-    for gene1, gene2 in zip(individual[0:-1], individual[1:]):
-        distance += map.get_distance(gene1, gene2)
+    travelled_cities = []
+    distance = 0
+    for city in individual:
+        if city >= IND_SIZE:
+            if len(travelled_cities) > 1:
+                traveller_distance = map.get_distance(travelled_cities[0], travelled_cities[-1])
+                for gene1, gene2 in zip(travelled_cities[0:-1], travelled_cities[1:]):
+                    traveller_distance += map.get_distance(gene1, gene2)
+                distance += pow(traveller_distance, 1.1)
+            travelled_cities.clear()
+        else:
+            travelled_cities.append(city)
+
+    if len(travelled_cities) > 1:
+        traveller_distance = map.get_distance(travelled_cities[0], travelled_cities[-1])
+        for gene1, gene2 in zip(travelled_cities[0:-1], travelled_cities[1:]):
+            traveller_distance += map.get_distance(gene1, gene2)
+        distance += pow(traveller_distance, 1.1)
+
     return distance,
 
 
@@ -97,23 +112,26 @@ if __name__ == "__main__":
     plt.figure()
     plt.plot(points_x, points_y, 'o')
 
-    color_idx = random.randint(0, len(color_names))
+    color_idx = random.randint(0, len(color_names) - 1)
 
+    print(hof[0])
+
+    start_city = hof[0][0]
     for city1, city2 in zip(hof[0][0:-1], hof[0][1:]):
-
         if city1 >= IND_SIZE:
-            color_idx = random.randint(0, len(color_names))
+            color_idx = random.randint(0, len(color_names) - 1)
+            start_city = city2
             continue
         else:
             pos1 = my_map.map_points[city1].position
 
         if city2 >= IND_SIZE:
-            color_idx = random.randint(0, len(color_names))
-            continue
+            pos2 = my_map.map_points[start_city].position
         else:
             pos2 = my_map.map_points[city2].position
 
-        plt.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], linewidth=1,
-                 color=color_names[color_idx])
-
+        plt.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], linewidth=1, color=color_names[color_idx])
+    pos1 = my_map.map_points[start_city].position
+    pos2 = my_map.map_points[hof[0][-1]].position
+    plt.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], linewidth=1, color=color_names[color_idx])
     plt.show()

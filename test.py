@@ -1,21 +1,25 @@
-from Map import *
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 
-my_map = Map(int(1e2), int(0), int(1e3), [0, 10])
+class InteractiveCircle(object):
+    def __init__(self):
+        self.fig, self.ax = plt.subplots()
+        self.ax.axis('equal')
 
-points_x = []
-points_y = []
-for point in my_map.map_points:
-    points_x.append(point.position[0])
-    points_y.append(point.position[1])
+        self.circ = Circle((0.5, 0.5), 0.1)
+        self.ax.add_artist(self.circ)
+        self.ax.set_title('Click to move the circle')
 
-plt.figure()
-plt.plot(points_x, points_y, 'o')
-for point in my_map.map_points:
-    points_x = []
-    points_y = []
-    for next_point in point.next:
-        points_x.append(next_point.position[0])
-        points_y.append(next_point.position[1])
-    plt.plot(points_x, points_y, linewidth=1, color='red')
-plt.show()
+        self.fig.canvas.mpl_connect('button_press_event', self.on_click)
+
+    def on_click(self, event):
+        if event.inaxes is None:
+            return
+        self.circ.center = event.xdata, event.ydata
+        self.fig.canvas.draw()
+
+    def show(self):
+        plt.show()
+
+
+InteractiveCircle().show()

@@ -25,7 +25,8 @@ class MapPoint:
 
 class Map:
     def __init__(self, node_num: int, edge_num: int, max_pos_range: int, value_range: list):
-        self.map_points = [MapPoint(idx, random.randint(value_range[0], value_range[1]), max_pos_range) for idx in range(node_num)]
+        self.map_points = [MapPoint(idx, random.randint(value_range[0], value_range[1]), max_pos_range) for idx in
+                           range(node_num)]
 
         connected_edge_num = 0
         while connected_edge_num < edge_num:
@@ -35,8 +36,10 @@ class Map:
                 self.map_points[a].connect(self.map_points[b])
                 connected_edge_num += 1
 
-    def get_distance(self, city1:int, city2:int):
-        if city1 >= len(self.map_points) or city2 >= len(self.map_points):
-            return 0
+    def get_distance(self, city1: int, city2: int):
+        if city1 >= len(self.map_points):
+            city1 //= 10
+        if city2 >= len(self.map_points):
+            city2 //= 10
         return math.sqrt(pow(self.map_points[city1].position[0] - self.map_points[city2].position[0], 2) +
                          pow(self.map_points[city1].position[1] - self.map_points[city2].position[1], 2))
