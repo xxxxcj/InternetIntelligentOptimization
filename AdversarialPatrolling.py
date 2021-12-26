@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import math
 from matplotlib.patches import Circle
 from matplotlib.axes import Axes
+import numpy as np
 
 random.seed(15)
 
@@ -22,7 +23,7 @@ class Intruder:
         self.Circle = Circle((-1, -1), 0.2, color='yellow')
         self.Circle.set_zorder(100)
         self.type = intruder_type  # 0: 随机型小偷 1: 统计型小偷
-        self.steal_time = 1.0
+        self.steal_time = 3.0
         self.start_time = -1
 
     def is_stealing(self):
@@ -36,18 +37,42 @@ class Intruder:
             if self.start_time == -1:
                 self.start_time = t
                 self.Circle.set_color("red")
-            if t - self.start_time > self.steal_time:
+            elif t - self.start_time > self.steal_time:
                 return True
 
         if self.type == 1:
             if self.start_time == -1:
-                statistic = map_point_history[self.location]
-                self.start_time = t
-                self.Circle.set_color("red")
-            if t - self.start_time > self.steal_time:
+                if self.is_suitable_to_steal(t, map_point_history[self.location]):
+                    self.start_time = t
+                    self.Circle.set_color("red")
+            elif t - self.start_time > self.steal_time:
                 return True
 
         return False
+
+    def is_suitable_to_steal(self, t, history):
+        if len(history) < 1:
+            return False
+        patrolling_gap = []
+        last_visit_time = 0
+        for visit_time in history:
+            patrolling_gap.append(visit_time - last_visit_time)
+            last_visit_time = visit_time
+
+        time_after_last_patrolling = t - history[-1]
+        count = 0
+
+        if time_after_last_patrolling + self.steal_time > 3*np.mean(patrolling_gap):
+            return True
+
+        for gap in patrolling_gap:
+            if time_after_last_patrolling + self.steal_time < gap:
+                count += 1
+        if count / len(patrolling_gap) > .6:
+            return True
+        else:
+            return False
+
 
 
 class Algorithm:
@@ -64,12 +89,14 @@ class Algorithm:
         # 生成巡逻智能体
         self.agents = [Agent(i) for i in range(5)]
         self.intruders: list[Intruder] = [Intruder(loc, random.randint(0, 1)) for loc in random.sample(range(len(self.map_points)), 5)]
-        self.generate_intruder_gap = 7
+        self.generate_intruder_gap = 3
         self.last_generate_time = 0
 
         # 记录偷窃相关数据
+        self.generated_intruder_num = len(self.intruders)
         self.random_intruder_steal_value = 0
         self.statistic_intruder_steal_value = 0
+        self.detected_num = 0
 
         # 计算距离矩阵
         self.dist_matrix = [[-1 for _ in self.map_points] for _ in self.map_points]
@@ -105,8 +132,11 @@ class Algorithm:
                 idle_loc.remove(i.location)
             loc = random.sample(idle_loc, 1)[0]
             self.intruders.append(Intruder(loc, random.randint(0, 1)))
+            self.generated_intruder_num += 1
+
             self.intruders[-1].Circle.center = self.map_points[loc]
             self.ax.add_artist(self.intruders[-1].Circle)
+
             self.last_generate_time = t
             self.fig.canvas.draw()
             plt.pause(0.0001)
@@ -177,6 +207,7 @@ class Algorithm:
             if intruder.location == agent.location and intruder.is_stealing():
                 intruder.Circle.remove()
                 self.intruders.remove(intruder)
+                self.detected_num += 1
 
     def run_EGAI_random(self):
         self.generate_map()
@@ -189,9 +220,10 @@ class Algorithm:
                     intruder.Circle.remove()
                     if intruder.type == 0:
                         self.random_intruder_steal_value += 1
-                    elif intruder.type == 0:
+                    elif intruder.type == 1:
                         self.statistic_intruder_steal_value += 1
                     self.intruders.remove(intruder)
+                    print(self.detected_num, self.random_intruder_steal_value, self.statistic_intruder_steal_value, self.generated_intruder_num)
             # print(self.intruders)
             for agent_idx, agent in enumerate(self.agents):
                 if agent.status == 0:
@@ -253,6 +285,18 @@ class Algorithm:
         t = 0
         step_t = 0.1
         while True:
+            self.generate_intruder(t)
+            for intruder in self.intruders:
+                if intruder.steal(t, self.visited_history):
+                    intruder.Circle.remove()
+                    if intruder.type == 0:
+                        self.random_intruder_steal_value += 1
+                    elif intruder.type == 1:
+                        self.statistic_intruder_steal_value += 1
+                    self.intruders.remove(intruder)
+                    print(self.detected_num, self.random_intruder_steal_value, self.statistic_intruder_steal_value,
+                          self.generated_intruder_num)
+            # print(self.intruders)
             for agent_idx, agent in enumerate(self.agents):
                 if agent.status == 0:
                     U = []
@@ -286,12 +330,15 @@ class Algorithm:
                     else:
                         agent.status = 0
                         agent.location = self.target_list[agent_idx]
+
+                        self.detect_intruder(agent)
+
                         self.update_average_idle_time(t, agent.location)
                         self.k[agent.location] += 1
                         self.arrive_time[agent.location] = t
                         self.visited_history[agent.location].append(t)
-                        print(self.average_idle_time)
-                        print(sum(self.average_idle_time) / len(self.average_idle_time))
+                        # print(self.average_idle_time)
+                        # print(sum(self.average_idle_time) / len(self.average_idle_time))
                         self.target_list[agent_idx] = -1
 
             self.show_agent()
@@ -303,6 +350,18 @@ class Algorithm:
         t = 0
         step_t = 0.1
         while True:
+            self.generate_intruder(t)
+            for intruder in self.intruders:
+                if intruder.steal(t, self.visited_history):
+                    intruder.Circle.remove()
+                    if intruder.type == 0:
+                        self.random_intruder_steal_value += 1
+                    elif intruder.type == 1:
+                        self.statistic_intruder_steal_value += 1
+                    self.intruders.remove(intruder)
+                    print(self.detected_num, self.random_intruder_steal_value, self.statistic_intruder_steal_value,
+                          self.generated_intruder_num)
+            # print(self.intruders)
             for agent_idx, agent in enumerate(self.agents):
                 if agent.status == 0:
                     U = []
@@ -334,12 +393,15 @@ class Algorithm:
                     else:
                         agent.status = 0
                         agent.location = self.target_list[agent_idx]
+
+                        self.detect_intruder(agent)
+
                         self.update_average_idle_time(t, agent.location)
                         self.k[agent.location] += 1
                         self.arrive_time[agent.location] = t
                         self.visited_history[agent.location].append(t)
-                        print(self.average_idle_time)
-                        print(sum(self.average_idle_time) / len(self.average_idle_time))
+                        # print(self.average_idle_time)
+                        # print(sum(self.average_idle_time) / len(self.average_idle_time))
                         self.target_list[agent_idx] = -1
 
             self.show_agent()
